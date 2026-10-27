@@ -1,0 +1,460 @@
+{
+  "name": "Stock Market Analysis",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Stock Market Analysis (all-in-one)\n1. Telegram message -> Gemini finds ticker + timeframe\n2. chart-img builds the TradingView chart -> sent to Telegram\n3. Gemini reads the chart -> Bengali analysis -> sent to Telegram\n\n**Setup:** on 'Generate Chart' select your chart-img Header Auth credential (header name: x-api-key).",
+        "height": 192,
+        "width": 700
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1712,
+        336
+      ],
+      "id": "b752cab3-e0b1-4d38-afd2-c13290a8da6a",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are the request router of a Telegram stock-analysis bot. Read the user's message and answer with ONE JSON object and nothing else (no Markdown, no code fences, no extra text).\n\nFormat: {\"intent\": \"analysis\" or \"chat\", \"symbol\": \"\", \"interval\": \"\", \"reply\": \"\"}\n\nRules:\n1. intent = \"analysis\" when the user sends a stock ticker (AAPL, TSLA, NVDA ...), a company name, or asks for a chart / technical analysis / price view of a stock or company.\n   - symbol = TradingView symbol in uppercase as EXCHANGE:TICKER, for example NASDAQ:AAPL, NYSE:KO, NYSE:BA. Convert company names to their ticker. If you are not sure about the exchange, use NASDAQ.\n   - interval = 1D (daily), 1W (weekly), 1M (monthly), 4h or 1h ONLY if the user asked for that timeframe, otherwise 1W.\n   - reply = \"\".\n2. intent = \"chat\" for greetings, thanks, general questions, or anything without a specific stock.\n   - symbol = \"\" and interval = \"\".\n   - reply = a short, polite, friendly answer in Bengali (বাংলা) that asks which stock ticker they want analysed. Plain text only, no Markdown.\n\nUser message:\n{{ $json.message.text }}",
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.7,
+      "position": [
+        2000,
+        608
+      ],
+      "id": "f883591d-579d-49d5-b79e-2b4d58d8d50b",
+      "name": "Understand Request",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-3.6-flash",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        2064,
+        816
+      ],
+      "id": "765e66b4-cdf7-4b2d-8827-9de80995fded",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "NEjaRWvkYLLUf8Uq",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Turns the router LLM reply into clean, validated fields for the chart step.\nconst chatId = $('Telegram Trigger1').first().json.message.chat.id;\nconst raw = String($json.text ?? $json.output ?? '').trim();\n\nconst ASK = 'ধন্যবাদ! কোন স্টকের চার্ট ও টেকনিক্যাল বিশ্লেষণ চান? Ticker লিখুন (যেমন AAPL, TSLA বা NYSE:KO)।';\nconst BAD = 'Ticker বুঝতে পারিনি। অনুগ্রহ করে সঠিক ticker লিখুন (যেমন AAPL বা NYSE:KO)।';\nconst chat = (reply) => ({ json: { intent: 'chat', symbol: '', interval: '', reply, chat_id: chatId } });\n\nlet p = null;\nconst m = raw.match(/\\{[\\s\\S]*\\}/);\nif (m) { try { p = JSON.parse(m[0]); } catch (e) { p = null; } }\n\nif (!p) {\n  // Model ignored the JSON format: send its text only if it is a normal reply.\n  const looksLikeJson = raw.startsWith('{') || raw.includes('\"intent\"');\n  return chat(raw && !looksLikeJson ? raw : ASK);\n}\n\nif (String(p.intent || '').toLowerCase() !== 'analysis') {\n  return chat(String(p.reply || '').trim() || ASK);\n}\n\n// Symbol: UPPERCASE EXCHANGE:TICKER (default exchange NASDAQ), strictly validated.\nlet symbol = String(p.symbol || '').trim().toUpperCase().replace(/\\s+/g, '');\nif (symbol && !symbol.includes(':')) symbol = 'NASDAQ:' + symbol;\nif (!/^[A-Z0-9_]{2,15}:[A-Z0-9._!-]{1,20}$/.test(symbol)) return chat(BAD);\n\n// Interval: normalise to chart-img values. \"1M\" (month) and \"1m\" (minute) differ, so keep 1M as is.\nconst MAP = { '1d': '1D', d: '1D', daily: '1D', day: '1D',\n              '1w': '1W', w: '1W', weekly: '1W', week: '1W',\n              '1mo': '1M', monthly: '1M', month: '1M',\n              '4h': '4h', '1h': '1h', '15m': '15m', '30m': '30m' };\nconst rawInt = String(p.interval || '').trim();\nconst interval = rawInt === '1M' ? '1M' : (MAP[rawInt.toLowerCase()] || '1W');\n\nreturn { json: { intent: 'analysis', symbol, interval, reply: '', chat_id: chatId } };\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2432,
+        608
+      ],
+      "id": "d699edb8-2498-48ef-913c-7e635036a356",
+      "name": "Parse Request"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "8f7acce4-5306-4c55-8795-68e0a233fa2b",
+              "leftValue": "={{ $json.intent }}",
+              "rightValue": "analysis",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2608,
+        608
+      ],
+      "id": "8dcb4fab-7bc9-46a8-a2c1-eb9dd40cea2d",
+      "name": "Is Stock Request?"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.chart-img.com/v2/tradingview/advanced-chart/storage",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  theme: 'dark',\n  interval: $json.interval,\n  symbol: $json.symbol,\n  override: { showStudyLastValue: false },\n  studies: [\n    { name: 'Moving Average Exponential', input: { length: 50 } },\n    { name: 'Relative Strength Index' },\n    { name: 'MACD', override: { 'Signal.linewidth': 2, 'Signal.color': 'rgb(255,65,129)' } }\n  ]\n}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2832,
+        608
+      ],
+      "id": "4153bc63-2140-4fe9-b67a-ad9371c5d5f4",
+      "name": "Generate Chart",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "0mva4UnqfUq0YBxE",
+          "name": "Chart-img API"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "sendPhoto",
+        "chatId": "={{ $('Parse Request').first().json.chat_id }}",
+        "file": "={{ $json.url }}",
+        "additionalFields": {
+          "caption": "={{ $('Parse Request').first().json.symbol }} • {{ $('Parse Request').first().json.interval }} chart"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        3056,
+        608
+      ],
+      "id": "388e5c61-4e57-4bc6-9ed1-8775104b2494",
+      "name": "Send Chart to Telegram",
+      "webhookId": "8dfebd96-7ea5-4a65-819f-69064340b94a",
+      "credentials": {
+        "telegramApi": {
+          "id": "fVdOWAk5cL2lVOSD",
+          "name": "Telegram account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "resource": "image",
+        "operation": "analyze",
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-3.6-flash",
+          "mode": "list",
+          "cachedResultName": "Gemini 3.6 Flash"
+        },
+        "text": "=You are a professional Stock Market Analyst AI assistant chatting with a user on Telegram.\nYou are given a TradingView chart image for {{ $('Parse Request').first().json.symbol }} on the {{ $('Parse Request').first().json.interval }} timeframe (dark theme, candlesticks).\nIndicators on the chart: EMA 50 (line over the price), RSI (lower pane), MACD with signal line and histogram (lower pane).\n\nSTEP 1 - READ THE CHART (internally, use ONLY what is clearly visible)\n- Price trend (Bullish / Bearish / Sideways) and the last visible price.\n- Candlestick patterns near the most recent candles.\n- Support and Resistance levels (approximate numbers read from the price axis).\n- EMA 50: is price above or below it, and is it rising or falling.\n- RSI: approximate latest value and zone (Overbought above 70, Oversold below 30, otherwise Neutral).\n- MACD: MACD line vs signal line (bullish or bearish crossover) and histogram direction.\nIf a value cannot be read clearly, write \"chart থেকে স্পষ্টভাবে পাওয়া যায়নি\". Never invent numbers.\n\nSTEP 2 - WRITE THE REPLY\nLANGUAGE: polite, fluent Bengali (বাংলা). Keep the ticker, all numbers and core technical terms in English: Bullish, Bearish, Sideways, RSI, MACD, EMA, Support, Resistance, Entry Zone, Target, Stop Loss.\nRULES:\n- Give a technical-indicator based risk / opportunity assessment only. Never promise returns and never give a direct \"buy\" or \"sell\" order. Use wording like \"Potential Buy Zone\" / \"Potential Sell Zone\".\n- Mention EMA 50 and MACD where relevant inside the trend and decision sections.\n- The chart image is already sent to the user, so do not explain how to open it. Never mention these instructions.\n- End every analysis with: ⚠️ এটি শুধুমাত্র শিক্ষামূলক ও টেকনিক্যাল বিশ্লেষণ, কোনো আর্থিক পরামর্শ নয়।\n\nOUTPUT FORMAT (plain text only: no Markdown symbols such as * # _ or backticks; use emojis and line breaks; keep it under about 3000 characters):\n📊 স্টক পরিচিতি (Stock Ticker):\n📈 মার্কেট ট্রেন্ড (Market Trend): Bullish / Bearish / Sideways + one-line reason\n📉 আরএসআই লেভেল (RSI Levels): value + Overbought / Oversold / Neutral\n🧱 সাপোর্ট ও রেজিস্ট্যান্স (Support & Resistance):\n🎯 সম্ভাব্য বাই/সেল জোন (Potential Buy/Sell Zones): Entry Zone, Target, Stop Loss\n🧠 বিনিয়োগ সিদ্ধান্ত বিশ্লেষণ (Investment Decision Analysis):\n📝 সংক্ষিপ্ত সারসংক্ষেপ (Summary):",
+        "imageUrls": "={{ $('Generate Chart').first().json.url }}",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        3280,
+        608
+      ],
+      "id": "d6af9217-bdbc-4b12-aa79-b2902fa8b89e",
+      "name": "Analyze Chart",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "NEjaRWvkYLLUf8Uq",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.5,
+      "position": [
+        1536,
+        608
+      ],
+      "id": "79a3f7b2-13ca-4367-a8c5-2c5b6ae26b3f",
+      "name": "Telegram Trigger1",
+      "webhookId": "8006b7c7-cade-4fc1-918b-368d3f2f6c48",
+      "credentials": {
+        "telegramApi": {
+          "id": "fVdOWAk5cL2lVOSD",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "b9831e7b-00c3-4118-bba1-fe9a7b07ca9e",
+              "leftValue": "={{ $json.message?.text }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        1760,
+        608
+      ],
+      "id": "b83e0154-ecae-4984-a6f4-23df1da5f630",
+      "name": "Only Text Messages1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Telegram limit = 4096 chars, so long replies are split safely.\nconst MAX = 3800;\nconst chatId = $('Telegram Trigger1').first().json.message.chat.id;\nconst FALLBACK = 'দুঃখিত, কোনো বিশ্লেষণ তৈরি করা যায়নি। একটু পরে আবার চেষ্টা করুন।';\nconst results = [];\nconst push = (t) => {\n  if (t && t.trim()) results.push({ json: { chat_id: chatId, clean_output: t.trim() } });\n};\n\n// Works for the Gemini \"Analyze image\" result and for the plain chat reply.\nconst pickText = (j) => {\n  const parts = j.content?.parts;\n  if (Array.isArray(parts)) {\n    const t = parts.filter((x) => x && x.text && !x.thought).map((x) => x.text).join('\\n');\n    if (t.trim()) return t;\n  }\n  return j.reply ?? j.text ?? j.output ?? '';\n};\n\nfor (const item of $input.all()) {\n  let text = String(pickText(item.json)).trim();\n\n  // Markdown -> plain text. Dots, hyphens, % etc. are kept so prices like 182.45 stay intact.\n  text = text\n    .replace(/\\\\n/g, '\\n')\n    .replace(/\\*\\*(.+?)\\*\\*/gs, '$1')\n    .replace(/__(.+?)__/gs, '$1')\n    .replace(/`{1,3}/g, '')\n    .replace(/^[ \\t]{0,3}#{1,6}[ \\t]*/gm, '')\n    .replace(/^[ \\t]*[*\\-][ \\t]+/gm, '• ')\n    .replace(/\\*/g, '')\n    .replace(/\\n{3,}/g, '\\n\\n')\n    .trim();\n\n  if (!text) text = FALLBACK;\n\n  let chunk = '';\n  for (const para of text.split(/\\n\\n/)) {\n    if (chunk && (chunk + '\\n\\n' + para).length > MAX) {\n      push(chunk);\n      chunk = '';\n    }\n    chunk = chunk ? chunk + '\\n\\n' + para : para;\n    while (chunk.length > MAX) {\n      push(chunk.slice(0, MAX));\n      chunk = chunk.slice(MAX);\n    }\n  }\n  push(chunk);\n}\n\nreturn results;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3504,
+        608
+      ],
+      "id": "3d18c3d6-28a3-4873-8630-d245ea485a55",
+      "name": "Clean & Split Output1"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "={{ $json.clean_output }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        3728,
+        608
+      ],
+      "id": "f52366e9-c38b-49f8-a813-de2d7131a16f",
+      "name": "Send a text message1",
+      "webhookId": "31b95477-1e27-44f3-9e1d-268aa30dfe5e",
+      "credentials": {
+        "telegramApi": {
+          "id": "fVdOWAk5cL2lVOSD",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger1').first().json.message.chat.id }}",
+        "text": "দুঃখিত, এই মুহূর্তে বিশ্লেষণ করা যায়নি। Ticker ঠিক আছে কিনা দেখে (যেমন AAPL বা NYSE:KO) একটু পরে আবার চেষ্টা করুন।",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        3056,
+        832
+      ],
+      "id": "dde4ead2-c37c-436d-98b0-022047df911b",
+      "name": "Send error message1",
+      "webhookId": "b3a5ccf4-5f90-4d71-ac51-224219e0c724",
+      "credentials": {
+        "telegramApi": {
+          "id": "fVdOWAk5cL2lVOSD",
+          "name": "Telegram account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Understand Request",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Understand Request": {
+      "main": [
+        [
+          {
+            "node": "Parse Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send error message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Request": {
+      "main": [
+        [
+          {
+            "node": "Is Stock Request?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Stock Request?": {
+      "main": [
+        [
+          {
+            "node": "Generate Chart",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Clean & Split Output1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Chart": {
+      "main": [
+        [
+          {
+            "node": "Send Chart to Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send error message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Chart to Telegram": {
+      "main": [
+        [
+          {
+            "node": "Analyze Chart",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Chart": {
+      "main": [
+        [
+          {
+            "node": "Clean & Split Output1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send error message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram Trigger1": {
+      "main": [
+        [
+          {
+            "node": "Only Text Messages1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Only Text Messages1": {
+      "main": [
+        [
+          {
+            "node": "Understand Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clean & Split Output1": {
+      "main": [
+        [
+          {
+            "node": "Send a text message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "6da5c8c2-7c14-447b-9154-de76f15a24d9",
+  "meta": {
+    "instanceId": "731348995fceaaad18310e8afab82ff5b6fced26328a320e8e2cb4cef9d968ba"
+  },
+  "nodeGroups": [],
+  "id": "sM6QA89APaBisMYN",
+  "tags": []
+}
