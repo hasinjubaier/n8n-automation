@@ -1,0 +1,291 @@
+{
+  "name": "Personal Expense Agent (Web Chat)",
+  "nodes": [
+    {
+      "parameters": {
+        "public": true,
+        "initialMessages": "Assalam-o-Alaikum! 👋 Main aapka AI Expense Assistant hun.\nApna koi bhi kharcha likhein (jaise: 'Aaj 600 petrol aur 1200 biryani pe laga') ya mujhse apna total hisaab poochein!",
+        "options": {}
+      },
+      "id": "a8b0c10c-bf4e-4a63-bfa1-27874107898d",
+      "name": "When chat message received",
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        976,
+        576
+      ],
+      "webhookId": "d7a59205-31c6-4579-96b1-cc3eb6585bbb"
+    },
+    {
+      "parameters": {
+        "options": {
+          "systemMessage": "You are a personal and business expense tracker AI assistant.\n\nCurrent Date & Time: {{ $now }}\n\n## LANGUAGE\nUnderstand Bangla (বাংলা), Romanized Bangla/Banglish, English, and mixed-language messages. Reply in the user's language and keep replies friendly, clear, and concise.\n\n## ADDING EXPENSES\nFor each distinct expense the user reports, call `Add_Expense_to_Sheet` once. The Google Sheet has separate columns: `Date`, `Item`, `Category`, `Amount`, `Payment Method`, and `Currency`. Pass each value into its matching tool field. NEVER combine the fields into one text string.\n\n- Date: YYYY-MM-DD. If the user says today or gives no date, use {{ $now.format('yyyy-MM-dd') }}. Interpret relative dates using the current date. Ask if the intended date is ambiguous.\n- Item: short, clear purchase/expense name.\n- Category: use the closest matching category from the sheet's dropdown: Dining, Transportation, Groceries, Utilities, Shopping, Health & Fitness, Subscription, Entertainment, Other. Use the exact dropdown label. If these labels do not match the Google Sheet's dropdown, the sheet's dropdown options must be updated to match before testing.\n- Amount: numeric value only, without currency symbols.\n- Currency: ISO code, such as BDT, USD, EUR, GBP, INR, CAD, AUD, SGD, AED, SAR. If user says taka or the context clearly means a local Bangladesh expense, use BDT. If currency is unknown and can't safely be inferred, ask a short clarification. Never invent exchange rates or convert currencies automatically.\n- Payment Method: the actual payment method, preserving its name.\n\n## PAYMENT METHODS\nRecognize methods in Bangla, Banglish, and English.\nBangladesh methods include Cash, bKash, Nagad, Rocket, Upay, Tap, SureCash, CellFin, Bank Transfer, BEFTN, NPSB, RTGS, Debit Card, Credit Card, and QR Payment.\nInternational methods include Cash, Debit Card, Credit Card, Visa, Mastercard, American Express/Amex, Discover, UnionPay, PayPal, Wise, Payoneer, Skrill, Stripe, Apple Pay, Google Pay, Samsung Pay, Venmo, Cash App, Zelle, Revolut, ACH Transfer, Wire Transfer, SWIFT Transfer, SEPA Transfer, Western Union, MoneyGram, Klarna, Afterpay, Affirm, and any other method explicitly named by the user.\n- If no method is mentioned, default to Cash.\n- If the user only says card, save Card unless more detail is available.\n- Do not assume a payment provider was used simply because the user mentions it.\n- If an expense is split across methods and each amount is known, create separate entries for the portions. If not known, ask to clarify so you do not double-count.\n\n## READING EXPENSES AND TOTALS\nWhen the user asks about past expenses, total spending, category totals, payment-method totals, or expense history, call `Read_Expenses_from_Sheet` first.\n- Calculate only from returned rows and use the separate columns.\n- Filter by the requested date range, item, category, payment method, and/or currency.\n- Never add amounts from different currencies into one total. Report separate subtotals per currency unless the user explicitly provides a conversion rate.\n- Do not count a transaction twice or invent missing records.\n- If the tool fails, returns incomplete data, or finds no matching rows, explain that clearly.\n\n## TOOL AND DATA RELIABILITY\n- Use `Add_Expense_to_Sheet` to add records and `Read_Expenses_from_Sheet` to retrieve them.\n- Report a save only after the tool confirms success. For multiple expenses, report only confirmed saves and total those successfully saved amounts by currency.\n- If a write's result is ambiguous, check the sheet before retrying to avoid duplicates.\n- Do not claim a tool succeeded if it failed.\n\n## RESPONSE STYLE\nBe friendly and concise. For a saved expense, list its date, item, category, amount with currency, and payment method. Use readable bullets and occasional relevant emojis. For historical spending, state the requested date range/filter and the total calculated from actual rows."
+        }
+      },
+      "id": "dd1b54d6-af75-48a1-a135-109bc1b1fcc6",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        1168,
+        576
+      ]
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-3.5-flash-lite",
+        "options": {}
+      },
+      "id": "787033cf-17dc-405d-ae5b-8aa84bc40169",
+      "name": "Google Gemini Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        1056,
+        816
+      ],
+      "retryOnFail": true,
+      "maxTries": 4,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "googlePalmApi": {
+          "id": "pOXm388ztBz5o4k7",
+          "name": "Google Gemini(PaLM) Api account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "contextWindowLength": 10
+      },
+      "id": "b14f6862-1d8a-4cc4-9e3d-d8a52c391836",
+      "name": "Simple Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.2,
+      "position": [
+        1200,
+        816
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "16FyRHOfLVZotca-qcPXE6V_J7yVLrVWgoYUxt_VBCbk",
+          "mode": "list",
+          "cachedResultName": "My Expence Tracker",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/16FyRHOfLVZotca-qcPXE6V_J7yVLrVWgoYUxt_VBCbk/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/16FyRHOfLVZotca-qcPXE6V_J7yVLrVWgoYUxt_VBCbk/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Date": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Date', `Date of the expense in YYYY-MM-DD format`, 'string') }}",
+            "Item": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Item', `Short clean name of the item or expense`, 'string') }}",
+            "Category": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Category', `Exact category label used by the spreadsheet dropdown`, 'string') }}",
+            "Amount": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Amount', `Numeric expense amount without currency symbol`, 'number') }}",
+            "Payment Method": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Payment_Method', `Actual payment method, for example Cash, bKash, Visa Credit Card, or PayPal`, 'string') }}",
+            "Currency": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Currency', `ISO currency code such as BDT or USD`, 'string') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Date",
+              "displayName": "Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "Item",
+              "displayName": "Item",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "Category",
+              "displayName": "Category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "Amount",
+              "displayName": "Amount",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "Payment Method",
+              "displayName": "Payment Method",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "Currency",
+              "displayName": "Currency",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": true,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "59b18ae7-0107-4a00-9e35-f8d2e2913697",
+      "name": "Add_Expense_to_Sheet",
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.5,
+      "position": [
+        1344,
+        816
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "qEcSEmFk2hCJ4eTR",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "16FyRHOfLVZotca-qcPXE6V_J7yVLrVWgoYUxt_VBCbk",
+          "mode": "list",
+          "cachedResultName": "My Expence Tracker",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/16FyRHOfLVZotca-qcPXE6V_J7yVLrVWgoYUxt_VBCbk/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/16FyRHOfLVZotca-qcPXE6V_J7yVLrVWgoYUxt_VBCbk/edit#gid=0"
+        },
+        "options": {}
+      },
+      "id": "b706e62d-c567-4e62-b1c9-20c9e88ff606",
+      "name": "Read_Expenses_from_Sheet",
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.5,
+      "position": [
+        1504,
+        816
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "qEcSEmFk2hCJ4eTR",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add_Expense_to_Sheet": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read_Expenses_from_Sheet": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "d78e3608-20f7-41e9-884c-887df5f7df9f",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "731348995fceaaad18310e8afab82ff5b6fced26328a320e8e2cb4cef9d968ba"
+  },
+  "nodeGroups": [],
+  "id": "3sdXNuhD0GqsAT1r",
+  "tags": []
+}
