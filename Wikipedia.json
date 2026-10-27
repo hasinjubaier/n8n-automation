@@ -1,0 +1,137 @@
+{
+  "name": "Wikipedia",
+  "nodes": [
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.5,
+      "position": [
+        0,
+        0
+      ],
+      "id": "ae497830-b535-4025-8157-255462ff9ed6",
+      "name": "When chat message received",
+      "webhookId": "7b02994e-2451-4522-b478-4064937ce513"
+    },
+    {
+      "parameters": {
+        "options": {
+          "systemMessage": "You are small AI assistance with the great capabilities of searching real time information and live data. Whenever you receive a user query, please use wikipedia to search the information before responding, add emojis to the response. "
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        224,
+        0
+      ],
+      "id": "cf3d2efa-4590-40ee-8bcf-143e193a4eb3",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "options": {
+          "maxTokens": 4000
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        96,
+        208
+      ],
+      "id": "884caa65-d7ee-48eb-a816-25a7a1b6b867",
+      "name": "OpenRouter Chat Model",
+      "credentials": {
+        "openRouterApi": {
+          "id": "D1NpmXnhkLWaDb5G",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.4,
+      "position": [
+        240,
+        208
+      ],
+      "id": "ed8af7fd-16ae-4414-9f8c-f200df15c328",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {},
+      "type": "@n8n/n8n-nodes-langchain.toolWikipedia",
+      "typeVersion": 1,
+      "position": [
+        464,
+        192
+      ],
+      "id": "eecee8ad-8e12-43ef-9f7e-7ec0d845c2c3",
+      "name": "Wikipedia"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wikipedia": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "3ac00380-1f7f-41b4-b5eb-fcb55137d50a",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "d74bef8dbd6c37a76a88860f5a72dace58e209542d367faa20e0ffccd7d039b1"
+  },
+  "nodeGroups": [],
+  "id": "Kp9bOXpXCu1HC1t3",
+  "tags": []
+}
